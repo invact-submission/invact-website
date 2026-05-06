@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=1280" />
+<title>InvAct</title>
+<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600&family=Google+Sans+Code:wght@400;500&display=swap" />
+</head>
+<body>
+<main class="paper">
+<header class="paper-hero centered">
+<h1 class="paper-title">InvAct: View and Scene-invariant Atomic Action Learning from Videos</h1>
+<div class="paper-anonymous-note">Anonymous submission (double-blind review)</div>
+</header>
+
+<section class="paper-section centered-section">
+<p>
+⚛️ <strong>TL;DR:</strong> For the first time, we learn <strong>atomic action embeddings</strong> that are invariant to both viewpoint and scene changes. This enables robust retrieval and transfer across short- and long-horizon human-centric and robot-centric action downstream tasks.</p>
+</section>
+
+<section class="paper-section video-query-section video-query-section-v2">
+<div class="video-query-header">
+<p>
+Select a query clip below, and InvAct will fetch the most similar atomic-action videos from <a href="https://ego-exo4d-data.org/" class="paper-link">Ego-Exo4D validation set</a>. <strong>Shuffle queries</strong> to see different queries.
+<span class="inference-note"><strong>Model does not see text prompts at inference.</strong></span>
+</p>
+<div class="video-query-controls">
+<button id="videoShuffleBtn" class="video-shuffle-btn" type="button">Shuffle queries</button>
+</div>
+</div>
+<div id="videoGalleryStatus" class="video-gallery-status hidden"></div>
+<div class="video-gallery-wrap">
+<div id="videoGalleryOverlay" class="video-gallery-overlay">
+<div class="video-gallery-overlay-inner">
+<div class="video-gallery-overlay-label">Loading videos…</div>
+</div>
+</div>
+<div id="videoGallery" class="video-query-grid">
+<div id="videoQueryTitleRow" class="video-query-title-row"></div>
+<div id="videoQueryRow" class="video-query-row"></div>
+<div class="video-result-header">
+<div class="video-result-title video-result-title-query">Current query</div>
+<div class="video-result-title video-result-title-matches">Top-5 cross-scene matches</div>
+</div>
+<div id="videoResultRow" class="video-result-row"></div>
+</div>
+</div>
+</section>
+
+<section class="paper-section centered-section">
+<h2>Abstract</h2>
+<p>
+Action learning should capture interaction dynamics that generalize across viewpoint and scene changes. Although recent work pursues view-invariant representations, these methods often overfit to scene cues, weakening their ability to model and match fine-grained interactions, such as atomic actions. We address this with InvAct, the first atomic action embedding model invariant to both ego-exo viewpoint shifts and scene changes. Exploiting the sparsity of actions, we propose structured token commitment, a hard row-wise token routing mechanism that separates action from non-action content within the transformer, allowing the action token to focus on interactions while non-action content is implicitly routed to register tokens and discarded. We further introduce a novel unified scene-aware contrastive objective that attracts same-action clips across scenes and repels different actions from the same scene. InvAct significantly outperforms baselines in cross-view and cross-scene action retrieval, transfers strongly to unseen datasets, decreases scene-bias significantly, has good language understanding, enables long sequence actions via composition of atomic embeddings, and shows promising results on robotic manipulation tasks.
+</p>
+</section>
+
+
+
+
+</div>
+</section>
+<section class="paper-section">
+<h2>Atomic actions vs. keystep actions</h2>
+<div class="paper-grid method-grid method-grid--arch">
+<div class="method-notes">
+<p>
+<strong>Keystep actions</strong>
+<em>(e.g. checking for damages, cooking omelet, repairing a bike, unboxing a package)</em>
+describe longer, higher-level procedures that often correlate strongly with objects, the context of
+the scene, and appearance. These higher-level activities can be decomposed into
+<strong>atomic actions</strong>
+<em>(e.g. pushing, pulling, cutting, placing a box on a table)</em>, which are short
+interaction-centric primitives, characterized by fine-grained temporal dynamics and contact patterns.
+We utilize the notation in Ego-Exo4D dataset for atomic and keystep actions.
+</p>
+
+<p><strong>
+We train with atomic actions, and demonstrate on both atomic actions and keystep actions.
+</strong></p>
+</div>
+<div class="figure-stack figure-stack--arch">
+<div class="figure-block">
+<img class="figure-embed figure-embed--arch" src="data/arch.svg" alt="Architecture of our action extractor method" />
+<div class="figure-caption">
+Architecture of our action extractor method. We first only train the tubelet embedder and
+transformer with atomic-action labels but can later infer atomic-actions and keystep-actions. We guide the attention mechanism with our structured token commitment.
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="paper-section">
+<h2>The problem of view-invariance with keystep actions</h2>
+<div class="paper-grid method-grid keystep-problem-layout">
+<div class="keystep-problem-grid">
+<div class="keystep-problem-row">
+<div class="keystep-cell keystep-cell--query">
+<div class="keystep-query-title">hold</div>
+<div class="paper-vid-item keystep-query query-highlight">
+<video
+class="paper-vid"
+autoplay
+muted
+loop
+playsinline
+preload="metadata"
+src="data/paper_vids/query_1.mp4"
+></video>
+<div class="video-card-title">Query</div>
+</div>
+</div>
+<div class="keystep-cell keystep-cell--grid">
+<div class="keystep-grid-main-title">Top-4 matches (ego-ego)</div>
+<div class="keystep-grid-track keystep-grid-track--top">
+<div class="keystep-grid-track-hit">hold</div>
+<div class="keystep-grid-track-hit">hold</div>
+<div class="keystep-grid-track-hit">hold</div>
+<div>break</div>
+</div>
+<div class="keystep-grid-row">
+<div class="keystep-grid-labels">
+<div class="keystep-grid-label">Ours</div>
+<div class="keystep-grid-label">Rosetta</div>
+</div>
+<div class="paper-vid-item keystep-grid">
+<video
+class="paper-vid"
+autoplay
+muted
+loop
+playsinline
+preload="metadata"
+src="data/paper_vids/grid_1_trim.mp4"
+></video>
+</div>
+</div>
+<div class="keystep-grid-track keystep-grid-track--bottom">
+<div>pour</div>
+<div>turn</div>
+<div>pour</div>
+<div>move</div>
+</div>
+</div>
+</div>
+<div class="keystep-problem-row">
+<div class="keystep-cell keystep-cell--query">
+<div class="keystep-query-title">pick</div>
+<div class="paper-vid-item keystep-query query-highlight">
+<video
+class="paper-vid"
+autoplay
+muted
+loop
+playsinline
+preload="metadata"
+src="data/paper_vids/query_2.mp4"
+></video>
+<div class="video-card-title">Query</div>
+</div>
+</div>
+<div class="keystep-cell keystep-cell--grid">
+<div class="keystep-grid-main-title">Top-4 matches (ego-exo)</div>
+<div class="keystep-grid-track keystep-grid-track--top">
+<div class="keystep-grid-track-hit">pick</div>
+<div class="keystep-grid-track-hit">pick</div>
+<div class="keystep-grid-track-hit">pick</div>
+<div class="keystep-grid-track-hit">pick</div>
+</div>
+<div class="keystep-grid-row">
+<div class="keystep-grid-labels">
+<div class="keystep-grid-label">Ours</div>
+<div class="keystep-grid-label">Rosetta</div>
+</div>
+<div class="paper-vid-item keystep-grid">
+<video
+class="paper-vid"
+autoplay
+muted
+loop
+playsinline
+preload="metadata"
+src="data/paper_vids/grid_2_trim.mp4"
+></video>
+</div>
+</div>
+<div class="keystep-grid-track keystep-grid-track--bottom">
+<div>fold</div>
+<div>take</div>
+<div>stir</div>
+<div>shred</div>
+</div>
+</div>
+</div>
+</div>
+<div class="method-notes">
+<p>
+Videos above illustrate retrieval behavior in the Ego-Exo4D validation set, with all scenes included in the retrieval pool, for our method and baseline Viewpoint Rosetta.
+</p>
+
+<p>
+It can be seen that prior methods like Rosetta often exploit a shortcut by ranking top-k clips according to shared scene context, such as layout and objects, rather than interaction dynamics. 
+</p>
+
+<p>
+This specific failure mode is most evident in the ego-exo examples. The method may return a hit with a superficially similar action, but it does so by retrieving clips from the same kitchen and matching static cues such as the blue bowl and brown cabinets, rather than recognizing the underlying interaction.
+As a result, it can miss stronger dynamic matches that occur in different scenes.
+</p>
+
+<p><strong>
+In comparison, InvAct can retrieve diverse, scene and view-invariant clips, that match the query action dynamics more faithfully.
+</strong></p> 
+</div>
+</div>
+</section>
+
+<section class="paper-section">
+<h2>Downstream on VLA pretraining for robotic manipulation</h2>
+<div class="montage-title-row">
+<div class="phyworld-grid-label">Task 1</div>
+<div class="phyworld-grid-label">Task 2</div>
+<div class="phyworld-grid-label">Task 3</div>
+<div class="phyworld-grid-label">Task 4</div>
+<div class="phyworld-grid-label">Task 5</div>
+<div class="phyworld-grid-label">Task 6</div>
+<div class="phyworld-grid-label">Task 7</div>
+<div class="phyworld-grid-label">Task 8</div>
+<div class="phyworld-grid-label">Task 9</div>
+<div class="phyworld-grid-label">Task 10</div>
+</div>
+<div class="paper-vid-item paper-video">
+<video
+class="paper-vid"
+autoplay
+muted
+loop
+playsinline
+preload="auto"
+src="data/paper_vids/success_montage.mp4?v=1"
+></video>
+</div>
+<div class="paper-grid method-grid">
+<div class="method-notes">
+<p>
+We further evaluate our action embeddings on simulated robotic manipulation tasks. Following LAPA, we use latent actions for VLA pretraining and measure task success rates. Specifically, we pretrain OpenVLA with atomic actions derived from both LAPA and our method on the SSV2 dataset, and then post-train on LIBERO using its task labels. Performance is evaluated on the LIBERO-10 benchmark in simulation.
+</p>
+
+<p>
+Right figure shows that our embedding space improves VLA performance and increases success rates on downstream robotic tasks. Specifically, baseline achieves 34% success rate, LAPA improves +10% and ours improve +18% over the baseline. These results indicate that our representations can help bridge human-centric action understanding and robot-centric action learning.
+</p>
+</div>
+<div class="figure-stack">
+<div class="figure-block">
+<img class="figure-embed" src="data/libero10_scores.svg" alt="LIBERO-10 scores" />
+</div>
+</div>
+</div>
+</section>
+
+<section class="paper-section phyworld-grid-section">
+<h2>Qualitative comparison</h2>
+<p>
+We compare the retrieval grids from InvAct (top) and Viewpoint Rosetta (bottom).
+Each column shows a fixed query video (leftmost video in each row) and top-3 matches in the PhyWorld dataset.
+The baseline mostly behaves like a near-static visual matcher, prioritizing color and shape similarity (column 1 and 3)
+over the temporal cues required to distinguish fine-grained actions.
+InvAct can successfully retrieve same-directioned matches with diverse appearances.
+</p>
+<div class="phyworld-grid-columns">
+<div class="phyworld-grid-col">
+<div class="phyworld-grid-item">
+<div class="phyworld-grid-label">InvAct</div>
+<div class="phyworld-grid-subtitles">
+<div class="phyworld-grid-subtitle phyworld-grid-subtitle--query">Query</div>
+<div class="phyworld-grid-subtitle phyworld-grid-subtitle--matches">Top-3 Matches</div>
+</div>
+<div class="phyworld-grid-frame">
+<video
+class="phyworld-grid-video"
+autoplay
+muted
+loop
+playsinline
+preload="metadata"
+src="data/phyworld_grids/ours_query_003.mp4"
+></video>
+</div>
+</div>
+<div class="phyworld-grid-item">
+<div class="phyworld-grid-label">Viewpoint Rosetta</div>
+<div class="phyworld-grid-subtitles">
+<div class="phyworld-grid-subtitle phyworld-grid-subtitle--query">Query</div>
+<div class="phyworld-grid-subtitle phyworld-grid-subtitle--matches">Top-3 Matches</div>
+</div>
+<div class="phyworld-grid-frame">
+<video
+class="phyworld-grid-video"
+autoplay
+muted
+loop
+playsinline
+preload="metadata"
+src="data/phyworld_grids/rosetta_query_003.mp4"
+></video>
+</div>
+</div>
+</div>
+<div class="phyworld-grid-col">
+<div class="phyworld-grid-item">
+<div class="phyworld-grid-label">InvAct</div>
+<div class="phyworld-grid-subtitles">
+<div class="phyworld-grid-subtitle phyworld-grid-subtitle--query">Query</div>
+<div class="phyworld-grid-subtitle phyworld-grid-subtitle--matches">Top-3 Matches</div>
+</div>
+<div class="phyworld-grid-frame">
+<video
+class="phyworld-grid-video"
+autoplay
+muted
+loop
+playsinline
+preload="metadata"
+src="data/phyworld_grids/ours_query_020.mp4"
+></video>
+</div>
+</div>
+<div class="phyworld-grid-item">
+<div class="phyworld-grid-label">Viewpoint Rosetta</div>
+<div class="phyworld-grid-subtitles">
+<div class="phyworld-grid-subtitle phyworld-grid-subtitle--query">Query</div>
+<div class="phyworld-grid-subtitle phyworld-grid-subtitle--matches">Top-3 Matches</div>
+</div>
+<div class="phyworld-grid-frame">
+<video
+class="phyworld-grid-video"
+autoplay
+muted
+loop
+playsinline
+preload="metadata"
+src="data/phyworld_grids/rosetta_query_020.mp4"
+></video>
+</div>
+</div>
+</div>
+<div class="phyworld-grid-col">
+<div class="phyworld-grid-item">
+<div class="phyworld-grid-label">InvAct</div>
+<div class="phyworld-grid-subtitles">
+<div class="phyworld-grid-subtitle phyworld-grid-subtitle--query">Query</div>
+<div class="phyworld-grid-subtitle phyworld-grid-subtitle--matches">Top-3 Matches</div>
+</div>
+<div class="phyworld-grid-frame">
+<video
+class="phyworld-grid-video"
+autoplay
+muted
+loop
+playsinline
+preload="metadata"
+src="data/phyworld_grids/ours_query_118.mp4"
+></video>
+</div>
+</div>
+<div class="phyworld-grid-item">
+<div class="phyworld-grid-label">Viewpoint Rosetta</div>
+<div class="phyworld-grid-subtitles">
+<div class="phyworld-grid-subtitle phyworld-grid-subtitle--query">Query</div>
+<div class="phyworld-grid-subtitle phyworld-grid-subtitle--matches">Top-3 Matches</div>
+</div>
+<div class="phyworld-grid-frame">
+<video
+class="phyworld-grid-video"
+autoplay
+muted
+loop
+playsinline
+preload="metadata"
+src="data/phyworld_grids/rosetta_query_118.mp4"
+></video>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+
+
+<section class="paper-section paper-vids-section">
+<p>
+Additional atomic-action video-video retrieval grids across view pairs from Ego-Exo4D dataset.
+</p>
+<div class="paper-vids-grid-wrap">
+<div class="paper-vids-labels">
+<div class="paper-vids-label">Query</div>
+<div class="paper-vids-label">InvAct</div>
+<div class="paper-vids-label">Rosetta</div>
+<div class="paper-vids-label">SUM-L</div>
+<div class="paper-vids-label">EgoVLP</div>
+<div class="paper-vids-label">LiFT</div>
+<div class="paper-vids-label">FlowFeat</div>
+</div>
+<div class="paper-vids-grid">
+<div class="paper-vid-item">
+<video
+class="paper-vid"
+autoplay
+muted
+loop
+playsinline
+preload="metadata"
+src="data/paper_vids/egoego1grid.mp4"
+></video>
+</div>
+<div class="paper-vid-item">
+<video
+class="paper-vid"
+autoplay
+muted
+loop
+playsinline
+preload="metadata"
+src="data/paper_vids/egoexo_grid.mp4"
+></video>
+</div>
+<div class="paper-vid-item">
+<video
+class="paper-vid"
+autoplay
+muted
+loop
+playsinline
+preload="metadata"
+src="data/paper_vids/exoego_grid.mp4"
+></video>
+</div>
+<div class="paper-vid-item">
+<video
+class="paper-vid"
+autoplay
+muted
+loop
+playsinline
+preload="metadata"
+src="data/paper_vids/exoexo_grid.mp4"
+></video>
+</div>
+</div>
+</div>
+</section>
+
+
+
+
+
+
+<section class="paper-section">
+<h2>Quantitative results</h2>
+<p>
+The table reveals InvAct can match keystep-specific trained methods, and outperforms all baselines on atomic-action retrieval, in cross-scene and cross-view scenarios.
+We use the atomic-action trained InvAct model for both atomic and keystep action retrieval.
+</p>
+<div class="table-wrap">
+<div class="table-caption">
+Video-video retrieval hit-rates of methods in the Ego-Exo4D validation set for both <strong>atomic</strong> and <strong>keystep</strong> actions.
+<code>g</code> and <code>x</code> denote ego and exo, respectively. For keystep actions on our method, we use the atomic-action checkpoint without finetuning.
+Best three results are shown in <strong>bold</strong>, <u>underlined</u>, and <em>italic</em>. SV is single-view (ego), and MV is multi-view (ego-exo).
+</div>
+<table class="results-table">
+<thead>
+<tr>
+<th rowspan="3">Group</th>
+<th rowspan="3">Method</th>
+<th colspan="6">Atomic action hit-rates (@10)</th>
+<th colspan="6">Keystep action hit-rates (@10)</th>
+</tr>
+<tr>
+<th colspan="3">Cross-scene (&uarr;)</th>
+<th colspan="3">Cross-view (&uarr;)</th>
+<th colspan="3">Cross-scene (&uarr;)</th>
+<th colspan="3">Cross-view (&uarr;)</th>
+</tr>
+<tr>
+<th>g&rarr;g</th>
+<th>x&rarr;x</th>
+<th>avg.</th>
+<th>g&rarr;x</th>
+<th>x&rarr;g</th>
+<th>avg.</th>
+<th>g&rarr;g</th>
+<th>x&rarr;x</th>
+<th>avg.</th>
+<th>g&rarr;x</th>
+<th>x&rarr;g</th>
+<th>avg.</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td>Random</td>
+<td>3.04</td>
+<td>3.01</td>
+<td>3.02</td>
+<td>2.15</td>
+<td>3.70</td>
+<td>2.92</td>
+<td>6.23</td>
+<td>7.35</td>
+<td>6.79</td>
+<td>6.59</td>
+<td>6.72</td>
+<td>6.65</td>
+</tr>
+<tr>
+<td rowspan="5">Domain agnostic</td>
+<td>CLIP</td>
+<td>16.01</td>
+<td>15.33</td>
+<td>15.67</td>
+<td>14.03</td>
+<td>16.25</td>
+<td>15.14</td>
+<td>26.76</td>
+<td>20.47</td>
+<td>23.61</td>
+<td>17.71</td>
+<td>17.68</td>
+<td>17.70</td>
+</tr>
+<tr>
+<td>DINOv3</td>
+<td>19.08</td>
+<td>15.11</td>
+<td>17.09</td>
+<td>13.60</td>
+<td>16.32</td>
+<td>14.96</td>
+<td>28.50</td>
+<td>20.40</td>
+<td>24.45</td>
+<td>24.43</td>
+<td>19.42</td>
+<td>21.93</td>
+</tr>
+<tr>
+<td>V-JEPA 2</td>
+<td>17.83</td>
+<td>14.05</td>
+<td>15.94</td>
+<td>15.32</td>
+<td>18.40</td>
+<td>16.86</td>
+<td>33.75</td>
+<td>21.55</td>
+<td>27.65</td>
+<td>14.40</td>
+<td>17.45</td>
+<td>15.93</td>
+</tr>
+<tr>
+<td>FlowFeat</td>
+<td>23.56</td>
+<td>24.04</td>
+<td>23.80</td>
+<td>19.70</td>
+<td>23.54</td>
+<td>21.62</td>
+<td>21.25</td>
+<td>15.51</td>
+<td>18.38</td>
+<td>11.84</td>
+<td>12.89</td>
+<td>12.37</td>
+</tr>
+<tr>
+<td>LiFT</td>
+<td>27.84</td>
+<td>23.15</td>
+<td>25.50</td>
+<td>21.71</td>
+<td><em>27.08</em></td>
+<td><em>24.39</em></td>
+<td>25.88</td>
+<td>19.02</td>
+<td>22.45</td>
+<td>20.79</td>
+<td>16.23</td>
+<td>18.51</td>
+</tr>
+<tr>
+<td rowspan="2">Robot centric</td>
+<td>LAPA</td>
+<td>25.24</td>
+<td><u>26.52</u></td>
+<td>25.88</td>
+<td>15.96</td>
+<td>13.82</td>
+<td>14.89</td>
+<td>13.58</td>
+<td>15.28</td>
+<td>14.43</td>
+<td>15.09</td>
+<td>13.94</td>
+<td>14.51</td>
+</tr>
+<tr>
+<td>VILA</td>
+<td>19.21</td>
+<td>19.51</td>
+<td>19.36</td>
+<td><em>22.59</em></td>
+<td><u>29.51</u></td>
+<td><u>26.05</u></td>
+<td>33.03</td>
+<td>29.06</td>
+<td>31.04</td>
+<td>12.36</td>
+<td>7.22</td>
+<td>9.79</td>
+</tr>
+<tr>
+<td rowspan="4">Human centric (SV)</td>
+<td>TimeSFormer</td>
+<td>26.21</td>
+<td>20.73</td>
+<td>23.47</td>
+<td>19.55</td>
+<td>23.87</td>
+<td>21.71</td>
+<td>30.50</td>
+<td>19.84</td>
+<td>25.17</td>
+<td>17.55</td>
+<td>15.97</td>
+<td>16.76</td>
+</tr>
+<tr>
+<td>LaViLa</td>
+<td>28.52</td>
+<td><em>24.25</em></td>
+<td><em>26.39</em></td>
+<td><u>23.29</u></td>
+<td>23.84</td>
+<td>23.57</td>
+<td>41.26</td>
+<td>17.68</td>
+<td>29.47</td>
+<td>20.79</td>
+<td>16.43</td>
+<td>18.61</td>
+</tr>
+<tr>
+<td>EgoVLP</td>
+<td><u>29.61</u></td>
+<td>21.77</td>
+<td>25.69</td>
+<td><em>22.34</em></td>
+<td>23.52</td>
+<td>22.93</td>
+<td><strong>49.82</strong></td>
+<td>26.01</td>
+<td><em>37.91</em></td>
+<td><em>29.94</em></td>
+<td><em>22.53</em></td>
+<td><em>26.23</em></td>
+</tr>
+<tr>
+<td>EgoVLPv2</td>
+<td>29.35</td>
+<td>22.00</td>
+<td>25.67</td>
+<td>21.88</td>
+<td>23.54</td>
+<td>23.59</td>
+<td><u>48.11</u></td>
+<td>23.84</td>
+<td>35.98</td>
+<td>27.55</td>
+<td>22.43</td>
+<td>24.99</td>
+</tr>
+<tr>
+<td rowspan="5">Human centric (MV)</td>
+<td>AE2</td>
+<td>14.88</td>
+<td>14.06</td>
+<td>14.47</td>
+<td>15.47</td>
+<td>15.39</td>
+<td>15.43</td>
+<td>29.35</td>
+<td>33.13</td>
+<td>31.24</td>
+<td>11.22</td>
+<td>11.41</td>
+<td>11.32</td>
+</tr>
+<tr>
+<td>BYOV</td>
+<td>16.84</td>
+<td>15.94</td>
+<td>16.39</td>
+<td>14.57</td>
+<td>14.33</td>
+<td>14.45</td>
+<td>41.06</td>
+<td><u>37.49</u></td>
+<td><u>39.27</u></td>
+<td>20.47</td>
+<td>21.06</td>
+<td>20.75</td>
+</tr>
+<tr>
+<td>VI Encoder</td>
+<td>19.95</td>
+<td>18.64</td>
+<td>19.30</td>
+<td>19.01</td>
+<td>20.40</td>
+<td>19.71</td>
+<td>19.71</td>
+<td>16.17</td>
+<td>17.94</td>
+<td>16.63</td>
+<td>17.22</td>
+<td>16.93</td>
+</tr>
+<tr>
+<td>SUM-L</td>
+<td><em>29.58</em></td>
+<td>23.33</td>
+<td><u>26.46</u></td>
+<td>22.29</td>
+<td>23.27</td>
+<td>22.78</td>
+<td>36.04</td>
+<td>14.73</td>
+<td>25.39</td>
+<td>15.71</td>
+<td>9.81</td>
+<td>12.76</td>
+</tr>
+<tr>
+<td>Rosetta</td>
+<td>22.38</td>
+<td>20.95</td>
+<td>21.66</td>
+<td>21.66</td>
+<td>21.21</td>
+<td>21.43</td>
+<td>43.82</td>
+<td><em>34.42</em></td>
+<td><em>39.12</em></td>
+<td><strong>39.94</strong></td>
+<td><u>34.77</u></td>
+<td><strong>37.35</strong></td>
+</tr>
+<tr class="results-row-ours">
+<td></td>
+<td><strong>Ours</strong></td>
+<td><strong>34.03</strong></td>
+<td><strong>31.03</strong></td>
+<td><strong>32.53</strong></td>
+<td><strong>31.55</strong></td>
+<td><strong>32.02</strong></td>
+<td><strong>31.79</strong></td>
+<td><em>44.18</em></td>
+<td><strong>38.54</strong></td>
+<td><strong>41.36</strong></td>
+<td><u>36.34</u></td>
+<td><strong>35.62</strong></td>
+<td><u>35.98</u></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="paper-section video-query-section video-zeroshot-section">
+<h2>Zeroshot Retrieval</h2>
+<div class="video-query-header">
+<p>
+Explore zeroshot retrieval transfer on <a href="https://rose1.ntu.edu.sg/dataset/actionRecognition/" class="paper-link"><strong>NTU RGB+D</strong></a>, <a href="https://www.qualcomm.com/developer/software/something-something-v-2-dataset" class="paper-link"><strong>SSV2</strong></a>, and <a href="https://phyworld.github.io/" class="paper-link"><strong>PhyWorld</strong></a> datasets. Click on a video to assign it as the query, and sort the rest as a gallery based on its action similarity.
+</p>
+<div id="zeroVideoConfigTabs" class="video-config-tabs"></div>
+</div>
+<div id="zeroVideoGalleryStatus" class="video-gallery-status hidden"></div>
+<div class="video-gallery-wrap">
+<div id="zeroVideoGalleryOverlay" class="video-gallery-overlay">
+<div class="video-gallery-overlay-inner">
+<div class="video-gallery-overlay-label">Loading videos…</div>
+</div>
+</div>
+<div id="zeroVideoGallery" class="video-gallery"></div>
+</div>
+</section>
+
+</main>
+<script defer src="app.js?v=seed42-nolatent"></script>
+</body>
+</html>
